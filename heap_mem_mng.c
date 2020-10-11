@@ -274,6 +274,53 @@ void _heap_dump(void * heap_ctrl)
 
 }
 
+static void* heap_check_safe(void *heap_ctrl)
+{
+	HEAP_CTRL *p_heap_ctrl = (HEAP_CTRL *)heap_ctrl;
+	if(NULL == heap_ctrl)
+	{
+		HEAP_ERR("error heap_ctrl %p\n", p_heap_ctrl);
+		return NULL;
+	}
+
+	HEAP_CHUNK *p_chunk = p_heap_ctrl->heap_mng_entry;
+	int i = 0;
+
+	if(NULL == p_chunk)
+	{
+		HEAP_ERR("g_heap_entry is NULL, please init heap\n");
+		return NULL;
+	}
+
+	int mem_seg = 0;
+
+	while(1)
+	{
+		HEAP_MNG_LOCK(p_heap_ctrl->lock);
+		do{
+			if(p_chunk->magic != HEAP_SAFE_MAGIC_NUM) mem_seg = 1;
+			if(1 == mem_seg)
+			{
+				HEAP_ERR("mem err leak!!!!!\n");
+				if(HEAP_S_USED == p_chunk->mem_flag)
+					HEAP_ERR("idx[%d] file %s line %u USED size %u magic 0x%x\n", i, p_chunk->file_name, p_chunk->line_num, p_chunk->size, p_chunk->magic);
+				else
+					HEAP_ERR("idx[%d] FREE size %u magic 0x%x\n", i, p_chunk->size, p_chunk->magic);
+			}
+
+			//HEAP_DBG("next chunk %p\n", p_chunk->next_chunk);
+			//HEAP_DBG("pre  chunk %p\n", p_chunk->pre_chunk);
+			i++;
+			p_chunk = (HEAP_CHUNK*)p_chunk->next_chunk;
+		}while(p_chunk != NULL && p_chunk != p_heap_ctrl->heap_mng_entry);
+		HEAP_MNG_UNLOCK(p_heap_ctrl->lock);
+		usleep(10*1000);
+	}
+
+	return NULL;
+}
+
+
 int heap_init(void **heap_ctrl, size_t size, const char *file_name, size_t line_num)
 {
 	if(heap_ctrl == NULL)
@@ -311,6 +358,9 @@ int heap_init(void **heap_ctrl, size_t size, const char *file_name, size_t line_
 	pthread_mutex_init(&p_heap_ctrl->lock, NULL);
 	memcpy(p_heap_ctrl->file_name, file_name, strlen(file_name)+1);
 	p_heap_ctrl->line_num = line_num;
+
+	pthread_t  p_pid;
+	pthread_create(&p_pid, NULL, heap_check_safe, p_heap_ctrl);
 
 	_heap_dump(p_heap_ctrl);
 	_heap_get_free(p_heap_ctrl);

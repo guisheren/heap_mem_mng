@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/time.h>
@@ -16,16 +17,17 @@
 void* pthread_test_malloc(void *args)
 {
 	int size = 0;
-	unsigned int cnt = 1024;
+	unsigned int cnt = 10;
 	int i = 0;
 
 	printf("pthread_run cnt %d\n", cnt);
 
 	while(i++ < cnt)
 	{
-		size = rand() % 1024 + 1;
+		size = 16;
 		char *p1 = TEST_MEM_MALLOC(args, size);
-		
+		memset(p1+16, 0, 4);
+
 		size = rand() % 1024 + 1;
 		char *p2 = TEST_MEM_MALLOC(args, size);
 
@@ -34,7 +36,7 @@ void* pthread_test_malloc(void *args)
 
 		size = rand() % 1024 + 1;
 		char *p4 = TEST_MEM_MALLOC(args, size);
-		_heap_dump(args);
+		//_heap_dump(args);
 		//sleep(5);
 		TEST_MEM_FREE(args, p1);
 		TEST_MEM_FREE(args, p4);
