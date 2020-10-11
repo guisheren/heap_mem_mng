@@ -35,7 +35,7 @@ void* pthread_test_malloc(void *args)
 		size = rand() % 1024 + 1;
 		char *p4 = TEST_MEM_MALLOC(args, size);
 		_heap_dump(args);
-
+		//sleep(5);
 		TEST_MEM_FREE(args, p1);
 		TEST_MEM_FREE(args, p4);
 		TEST_MEM_FREE(args, p2);
