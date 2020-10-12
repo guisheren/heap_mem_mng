@@ -18,7 +18,6 @@ typedef enum
 
 //内存块节点信息
 typedef struct _HEAP_CHUNK{
-	unsigned int magic;
 	struct _HEAP_CHUNK *pre_chunk;
 	struct _HEAP_CHUNK *next_chunk;
 	HEAP_STATUS mem_flag;
@@ -39,6 +38,8 @@ typedef struct _HEAP_CTRL{
 	char file_name[HEAP_FILE_LEN];
 	size_t line_num;
 }HEAP_CTRL;
+
+#define HEAP_BOARD_VALUE(sec, size)	*(unsigned int*)((char*)(sec) + (size) - sizeof(unsigned int))
 
 #define HEAP_ALLOC_MIN_SIZE sizeof(long int)
 #define ALIGN_UP_VAL(val, align) (((val) + (align) - 1) & (~((align)-1)))
@@ -73,7 +74,7 @@ static HEAP_CHUNK* _heap_new_chunk(void *buf, size_t size)
 	p_chunk->next_chunk = p_chunk;
 	p_chunk->mem_flag = HEAP_S_FREE;
 	p_chunk->size = size;
-	p_chunk->magic = HEAP_SAFE_MAGIC_NUM;
+	HEAP_BOARD_VALUE(p_chunk,size) = HEAP_SAFE_MAGIC_NUM;
 
 	return p_chunk;
 }
@@ -81,6 +82,7 @@ static HEAP_CHUNK* _heap_new_chunk(void *buf, size_t size)
 static void _heap_resize_chunk(HEAP_CHUNK *p_chunk, size_t size)
 {
 	p_chunk->size = size;
+	HEAP_BOARD_VALUE(p_chunk, p_chunk->size) = HEAP_SAFE_MAGIC_NUM;
 }
 
 static void _heap_insert_chunk(HEAP_CHUNK *p_chunk, HEAP_CHUNK *p_next_chunk)
@@ -132,7 +134,7 @@ static void* _heap_chunk_to_pointer(HEAP_CHUNK *p_chunk)
 
 static HEAP_CHUNK* _heap_pointer_to_chunk(void *buf)
 {
-	return (HEAP_CHUNK*)((char*)buf- sizeof(HEAP_CHUNK));
+	return (HEAP_CHUNK*)((char*)buf - sizeof(HEAP_CHUNK));
 }
 
 void* heap_malloc(void *heap_ctrl, size_t size, const char *file_name, size_t line_num)
@@ -175,9 +177,9 @@ void* heap_malloc(void *heap_ctrl, size_t size, const char *file_name, size_t li
 	do{
 		if(p_chunk->mem_flag == HEAP_S_FREE)
 		{
-			if(p_chunk->size >= sizeof(HEAP_CHUNK) + size + sizeof(HEAP_CHUNK) + HEAP_ALLOC_MIN_SIZE)
+			if(p_chunk->size >= sizeof(HEAP_CHUNK) + size + sizeof(HEAP_CHUNK) + HEAP_ALLOC_MIN_SIZE + sizeof(unsigned int) * 2)
 			{
-				size_t heap_alloc_size = sizeof(HEAP_CHUNK) + size;
+				size_t heap_alloc_size = sizeof(HEAP_CHUNK) + size + sizeof(unsigned int);
 				p_heap_alloc_chunk = p_chunk;
 				memset(p_heap_alloc_chunk->file_name, 0, sizeof(p_heap_alloc_chunk->file_name));
 				memcpy(p_heap_alloc_chunk->file_name, file_name, strlen(file_name));
@@ -258,9 +260,9 @@ void _heap_dump(void * heap_ctrl)
 
 	do{
 		if(HEAP_S_USED == p_chunk->mem_flag)
-			HEAP_DBG("idx[%d] file %s line %u USED size %u magic 0x%x\n", i, p_chunk->file_name, p_chunk->line_num, p_chunk->size, p_chunk->magic);
+			HEAP_DBG("idx[%d] file %s line %u USED size %u magic 0x%x\n", i, p_chunk->file_name, p_chunk->line_num, p_chunk->size, HEAP_BOARD_VALUE(p_chunk, p_chunk->size));
 		else
-			HEAP_DBG("idx[%d] FREE size %u magic 0x%x\n", i, p_chunk->size, p_chunk->magic);
+			HEAP_DBG("idx[%d] FREE size %u magic 0x%x\n", i, p_chunk->size, HEAP_BOARD_VALUE(p_chunk, p_chunk->size));
 		//HEAP_DBG("next chunk %p\n", p_chunk->next_chunk);
 		//HEAP_DBG("pre  chunk %p\n", p_chunk->pre_chunk);
 		i++;
@@ -298,14 +300,14 @@ static void* heap_check_safe(void *heap_ctrl)
 	{
 		HEAP_MNG_LOCK(p_heap_ctrl->lock);
 		do{
-			if(p_chunk->magic != HEAP_SAFE_MAGIC_NUM) mem_seg = 1;
+			if(HEAP_SAFE_MAGIC_NUM != HEAP_BOARD_VALUE(p_chunk, p_chunk->size)) mem_seg = 1;
 			if(1 == mem_seg)
 			{
 				HEAP_ERR("mem err leak!!!!!\n");
 				if(HEAP_S_USED == p_chunk->mem_flag)
-					HEAP_ERR("idx[%d] file %s line %u USED size %u magic 0x%x\n", i, p_chunk->file_name, p_chunk->line_num, p_chunk->size, p_chunk->magic);
+					HEAP_ERR("idx[%d] file %s line %u USED size %u magic 0x%x\n", i, p_chunk->file_name, p_chunk->line_num, p_chunk->size, HEAP_BOARD_VALUE(p_chunk, p_chunk->size));
 				else
-					HEAP_ERR("idx[%d] FREE size %u magic 0x%x\n", i, p_chunk->size, p_chunk->magic);
+					HEAP_ERR("idx[%d] FREE size %u magic 0x%x\n", i, p_chunk->size, HEAP_BOARD_VALUE(p_chunk, p_chunk->size));
 			}
 
 			//HEAP_DBG("next chunk %p\n", p_chunk->next_chunk);
